@@ -1,20 +1,20 @@
 # frozen_string_literal: true
 
 # ============================================================
-# Matchfile — dastan-games/ci-templates
+# Matchfile — abhineetprasad1/ci-templates
 #
 # These values are overridden at runtime by env vars in the
 # GitHub Actions workflow. This file sets sensible defaults
 # for local development use.
 #
 # To initialise a new game's certificates:
-#   MATCH_REPOSITORY=git@github.com:dastan-games/certs.git \
+#   MATCH_REPOSITORY=git@github.com:abhineetprasad1/certs.git \
 #   IOS_BUNDLE_ID=com.dastangames.mygame \
 #   IOS_TEAM_ID=XXXXXXXXXX \
 #   bundle exec fastlane match appstore
 # ============================================================
 
-git_url(ENV["MATCH_REPOSITORY"] || "git@github.com:dastan-games/certs.git")
+git_url(ENV["MATCH_REPOSITORY"] || "git@github.com:abhineetprasad1/certs.git")
 
 storage_mode("git")
 

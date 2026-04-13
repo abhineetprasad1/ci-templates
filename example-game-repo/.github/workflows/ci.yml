@@ -34,7 +34,7 @@ jobs:
   # ----------------------------------------------------------
   mobile:
     name: Mobile Builds
-    uses: dastan-games/ci-templates/.github/workflows/unity-mobile.yml@main
+    uses: abhineetprasad1/ci-templates/.github/workflows/unity-mobile.yml@main
     with:
       # --- Required ---
       unity_version: "2022.3.20f1"          # <-- set your project's Unity version
@@ -90,7 +90,7 @@ jobs:
   # Option B: Android only (uncomment to use instead of mobile:)
   # ----------------------------------------------------------
   # android-only:
-  #   uses: dastan-games/ci-templates/.github/workflows/unity-android.yml@main
+  #   uses: abhineetprasad1/ci-templates/.github/workflows/unity-android.yml@main
   #   with:
   #     unity_version: "2022.3.20f1"
   #     android_package_name: "com.dastangames.mygame"
@@ -100,7 +100,7 @@ jobs:
   # Option C: iOS only (uncomment to use instead of mobile:)
   # ----------------------------------------------------------
   # ios-only:
-  #   uses: dastan-games/ci-templates/.github/workflows/unity-ios.yml@main
+  #   uses: abhineetprasad1/ci-templates/.github/workflows/unity-ios.yml@main
   #   with:
   #     unity_version: "2022.3.20f1"
   #     ios_bundle_id: "com.dastangames.mygame"

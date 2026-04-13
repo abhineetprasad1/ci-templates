@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # ============================================================
-# Appfile — dastan-games/ci-templates
+# Appfile — abhineetprasad1/ci-templates
 # Values here are defaults; each game repo should override via
 # env vars or a local Appfile that shadows this one.
 # ============================================================

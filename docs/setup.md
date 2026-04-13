@@ -1,4 +1,4 @@
-# CI/CD Setup Guide — dastan-games/ci-templates
+# CI/CD Setup Guide — abhineetprasad1/ci-templates
 
 ## Repository layout
 
@@ -31,7 +31,7 @@ ci-templates/
 ```bash
 cd ci-templates
 git init
-git remote add origin git@github.com:dastan-games/ci-templates.git
+git remote add origin git@github.com:abhineetprasad1/ci-templates.git
 git add .
 git commit -m "chore: initial ci-templates"
 git push -u origin main
@@ -42,16 +42,16 @@ git push -u origin main
 Match stores encrypted signing certificates in a private git repo.
 
 ```bash
-# Create a new private repo (e.g. dastan-games/certs) then:
+# Create a new private repo (e.g. abhineetprasad1/certs) then:
 bundle exec fastlane match init
 # → storage_mode: git
-# → URL: git@github.com:dastan-games/certs.git
+# → URL: git@github.com:abhineetprasad1/certs.git
 ```
 
 Run once per game to create/register App ID and certificates:
 
 ```bash
-MATCH_REPOSITORY=git@github.com:dastan-games/certs.git \
+MATCH_REPOSITORY=git@github.com:abhineetprasad1/certs.git \
 IOS_BUNDLE_ID=com.dastangames.mygame \
 IOS_TEAM_ID=ABCDE12345 \
 bundle exec fastlane match appstore
@@ -157,7 +157,7 @@ base64 -i AuthKey_XXXXXXXX.p8 | pbcopy
 
 ```bash
 # Base64-encode: username:personal_access_token
-echo -n "dastan-games-bot:ghp_xxx..." | base64 | pbcopy
+echo -n "abhineetprasad1:ghp_xxx..." | base64 | pbcopy
 ```
 
 | Secret | Value |

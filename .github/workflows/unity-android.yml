@@ -1,6 +1,6 @@
 # ============================================================
 # Reusable Workflow: Android-only build + upload
-# Usage: dastan-games/ci-templates/.github/workflows/unity-android.yml@main
+# Usage: abhineetprasad1/ci-templates/.github/workflows/unity-android.yml@main
 # ============================================================
 name: Unity Android CI/CD
 

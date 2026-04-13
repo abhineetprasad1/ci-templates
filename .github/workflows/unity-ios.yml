@@ -1,6 +1,6 @@
 # ============================================================
 # Reusable Workflow: iOS-only build + TestFlight upload
-# Usage: dastan-games/ci-templates/.github/workflows/unity-ios.yml@main
+# Usage: abhineetprasad1/ci-templates/.github/workflows/unity-ios.yml@main
 # ============================================================
 name: Unity iOS CI/CD
 

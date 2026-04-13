@@ -1,7 +1,7 @@
 # frozen_string_literal: true
 
 # ============================================================
-# Fastfile — dastan-games/ci-templates
+# Fastfile — abhineetprasad1/ci-templates
 # Shared lanes for iOS (TestFlight) and Android (Google Play)
 # ============================================================
 

@@ -1,6 +1,6 @@
 # ============================================================
 # Reusable Workflow: Unity Mobile CI/CD (Android + iOS)
-# Usage: dastan-games/ci-templates/.github/workflows/unity-mobile.yml@main
+# Usage: abhineetprasad1/ci-templates/.github/workflows/unity-mobile.yml@main
 # ============================================================
 name: Unity Mobile CI/CD
 
