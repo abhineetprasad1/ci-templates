@@ -1,0 +1,153 @@
+# frozen_string_literal: true
+
+# ============================================================
+# Fastfile — dastan-games/ci-templates
+# Shared lanes for iOS (TestFlight) and Android (Google Play)
+# ============================================================
+
+default_platform(:ios)
+
+# ============================================================
+# Helpers
+# ============================================================
+
+def asc_api_key
+  app_store_connect_api_key(
+    key_id:       ENV.fetch("ASC_KEY_ID"),
+    issuer_id:    ENV.fetch("ASC_ISSUER_ID"),
+    key_filepath: ENV.fetch("ASC_KEY_PATH"),
+    duration:     1200,
+    in_house:     false
+  )
+end
+
+# ============================================================
+# iOS Platform
+# ============================================================
+
+platform :ios do
+  # ----------------------------------------------------------
+  # Lane: ios upload
+  # Runs on self-hosted macOS runner.
+  # Expects env vars set by the GitHub Actions workflow.
+  # ----------------------------------------------------------
+  desc "Sync certs (Match), archive (Gym), upload to TestFlight (Pilot)"
+  lane :upload do
+    xcode_project = ENV.fetch("XCODE_PROJECT_PATH")
+    bundle_id     = ENV.fetch("IOS_BUNDLE_ID")
+    team_id       = ENV.fetch("IOS_TEAM_ID")
+    build_number  = ENV.fetch("BUILD_NUMBER")
+    build_version = ENV.fetch("BUILD_VERSION")
+    match_type    = ENV.fetch("MATCH_TYPE", "appstore")
+
+    # 1. Fetch / refresh certificates and provisioning profiles
+    match(
+      type:                        match_type,
+      app_identifier:              bundle_id,
+      team_id:                     team_id,
+      git_url:                     ENV.fetch("MATCH_REPOSITORY"),
+      git_basic_authorization:     ENV["MATCH_GIT_BASIC_AUTHORIZATION"],
+      readonly:                    is_ci,          # never create new certs in CI
+      clone_branch_directly:       true
+    )
+
+    # 2. Set build number in the Xcode project
+    # Unity exports a project; we update the CFBundleVersion from the runner.
+    update_info_plist(
+      xcodeproj:    "#{xcode_project}/Unity-iPhone.xcodeproj",
+      plist_path:   "Info.plist",
+      block:        proc do |plist|
+        plist["CFBundleShortVersionString"] = build_version
+        plist["CFBundleVersion"]            = build_number
+      end
+    )
+
+    # 3. Archive and export IPA
+    gym(
+      scheme:               "Unity-iPhone",
+      project:              "#{xcode_project}/Unity-iPhone.xcodeproj",
+      configuration:        "Release",
+      export_method:        match_type == "appstore" ? "app-store" : match_type,
+      export_team_id:       team_id,
+      output_directory:     "build",
+      output_name:          "game-#{build_version}-#{build_number}.ipa",
+      clean:                true,
+      silent:               false,
+      include_bitcode:      false,
+      export_options: {
+        provisioningProfiles: {
+          bundle_id => "match #{match_type.capitalize} #{bundle_id}"
+        }
+      }
+    )
+
+    # 4. Upload to TestFlight
+    pilot(
+      api_key:                  asc_api_key,
+      app_identifier:           bundle_id,
+      ipa:                      "build/game-#{build_version}-#{build_number}.ipa",
+      skip_waiting_for_build_processing: true,
+      skip_submission:          false,
+      distribute_external:      false,
+      changelog:                "Build #{build_number} — automated CI upload"
+    )
+
+    UI.success "iOS build #{build_version} (#{build_number}) uploaded to TestFlight"
+  end
+
+  # ----------------------------------------------------------
+  # Lane: ios certificates
+  # Populate a new Match repo or refresh certs locally.
+  # Run manually: bundle exec fastlane ios certificates
+  # ----------------------------------------------------------
+  desc "Sync Match certificates (noop in CI — handled by upload lane)"
+  lane :certificates do
+    match(
+      type:            ENV.fetch("MATCH_TYPE", "appstore"),
+      app_identifier:  ENV.fetch("IOS_BUNDLE_ID"),
+      team_id:         ENV.fetch("IOS_TEAM_ID"),
+      git_url:         ENV.fetch("MATCH_REPOSITORY"),
+      readonly:        false
+    )
+  end
+end
+
+# ============================================================
+# Android Platform
+# ============================================================
+
+platform :android do
+  # ----------------------------------------------------------
+  # Lane: android upload
+  # Uploads AAB to Google Play (internal track by default).
+  # ----------------------------------------------------------
+  desc "Upload AAB to Google Play"
+  lane :upload do
+    package_name = ENV.fetch("ANDROID_PACKAGE_NAME")
+    track        = ENV.fetch("GOOGLE_PLAY_TRACK", "internal")
+    json_key     = ENV.fetch("GOOGLE_PLAY_JSON_KEY_PATH")
+    aab_dir      = ENV.fetch("AAB_PATH", "#{Dir.pwd}/../build/Android")
+
+    # Find the AAB (GameCI outputs to build/Android/<name>/<name>.aab)
+    aab_path = Dir.glob("#{aab_dir}/**/*.aab").first
+    UI.user_error!("No AAB found in #{aab_dir}") unless aab_path
+
+    UI.message "Uploading #{aab_path} to Google Play track: #{track}"
+
+    supply(
+      package_name:           package_name,
+      aab:                    aab_path,
+      track:                  track,
+      json_key:               json_key,
+      release_status:         "draft",    # change to "completed" for direct publish
+      skip_upload_apk:        true,
+      skip_upload_aab:        false,
+      skip_upload_metadata:   true,
+      skip_upload_changelogs: true,
+      skip_upload_images:     true,
+      skip_upload_screenshots: true
+    )
+
+    UI.success "Android AAB uploaded to Google Play (#{track})"
+  end
+end

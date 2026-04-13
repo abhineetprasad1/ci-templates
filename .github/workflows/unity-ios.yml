@@ -1,0 +1,156 @@
+# ============================================================
+# Reusable Workflow: iOS-only build + TestFlight upload
+# Usage: dastan-games/ci-templates/.github/workflows/unity-ios.yml@main
+# ============================================================
+name: Unity iOS CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      unity_version:
+        required: true
+        type: string
+      project_path:
+        required: false
+        type: string
+        default: "."
+      ios_bundle_id:
+        required: true
+        type: string
+      ios_team_id:
+        required: true
+        type: string
+      ios_build_name:
+        required: false
+        type: string
+        default: "iOS"
+      match_type:
+        required: false
+        type: string
+        default: "appstore"
+      upload_to_testflight:
+        required: false
+        type: boolean
+        default: true
+    secrets:
+      UNITY_LICENSE:
+        required: false
+      UNITY_EMAIL:
+        required: false
+      UNITY_PASSWORD:
+        required: false
+      UNITY_SERIAL:
+        required: false
+      ASC_KEY_ID:
+        required: false
+      ASC_ISSUER_ID:
+        required: false
+      ASC_KEY_CONTENT:
+        required: false
+      MATCH_PASSWORD:
+        required: false
+      MATCH_GIT_BASIC_AUTHORIZATION:
+        required: false
+      MATCH_REPOSITORY:
+        required: false
+
+jobs:
+  build-metadata:
+    name: Compute Build Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.meta.outputs.build_number }}
+      build_version: ${{ steps.meta.outputs.build_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: meta
+        shell: bash
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          if git describe --tags --exact-match HEAD 2>/dev/null; then
+            TAG=$(git describe --tags --exact-match HEAD)
+            VERSION="${TAG#v}"
+          else
+            VERSION="0.1.0"
+          fi
+          echo "build_version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  ios:
+    name: iOS IPA → TestFlight
+    needs: build-metadata
+    runs-on: [self-hosted, macOS]
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Activate Unity license
+        uses: game-ci/unity-activate@v2
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+
+      - name: Build iOS Xcode project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+        with:
+          unityVersion:       ${{ inputs.unity_version }}
+          projectPath:        ${{ inputs.project_path }}
+          targetPlatform:     iOS
+          buildName:          ${{ inputs.ios_build_name }}
+          versioning:         Custom
+          version:            ${{ needs.build-metadata.outputs.build_version }}
+          customParameters:   "-appleDeveloperTeamID ${{ inputs.ios_team_id }}"
+
+      - name: Return Unity license
+        uses: game-ci/unity-return-license@v2
+        if: always()
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
+
+      - name: Set up Ruby for Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: ci-support
+
+      - name: Write ASC API key
+        run: |
+          echo '${{ secrets.ASC_KEY_CONTENT }}' | base64 --decode > /tmp/asc-key.p8
+
+      - name: Archive, sign and upload to TestFlight
+        if: ${{ inputs.upload_to_testflight }}
+        working-directory: ci-support
+        env:
+          MATCH_PASSWORD:                ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          MATCH_REPOSITORY:              ${{ secrets.MATCH_REPOSITORY }}
+          MATCH_TYPE:                    ${{ inputs.match_type }}
+          IOS_BUNDLE_ID:                 ${{ inputs.ios_bundle_id }}
+          IOS_TEAM_ID:                   ${{ inputs.ios_team_id }}
+          ASC_KEY_ID:                    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID:                 ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH:                  /tmp/asc-key.p8
+          XCODE_PROJECT_PATH:            ${{ github.workspace }}/build/iOS/${{ inputs.ios_build_name }}
+          BUILD_NUMBER:                  ${{ needs.build-metadata.outputs.build_number }}
+          BUILD_VERSION:                 ${{ needs.build-metadata.outputs.build_version }}
+        run: bundle exec fastlane ios upload
+
+      - name: Upload IPA artifact
+        if: ${{ inputs.upload_to_testflight }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-${{ needs.build-metadata.outputs.build_number }}
+          path: ci-support/build/*.ipa
+          retention-days: 14

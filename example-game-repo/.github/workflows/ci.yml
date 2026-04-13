@@ -1,0 +1,108 @@
+# ============================================================
+# Example: How a game repo calls the shared ci-templates.
+# Copy this file into your game repo at:
+#   .github/workflows/ci.yml
+# Then configure the inputs and secret names to match.
+# ============================================================
+name: Mobile CI/CD
+
+on:
+  push:
+    branches:
+      - main
+      - "release/**"
+  workflow_dispatch:
+    inputs:
+      build_android:
+        description: "Build Android"
+        type: boolean
+        default: true
+      build_ios:
+        description: "Build iOS"
+        type: boolean
+        default: true
+
+# Prevent concurrent runs on the same branch to avoid license conflicts
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ----------------------------------------------------------
+  # Option A: Run both platforms from the combined workflow.
+  # Most games will use this.
+  # ----------------------------------------------------------
+  mobile:
+    name: Mobile Builds
+    uses: dastan-games/ci-templates/.github/workflows/unity-mobile.yml@main
+    with:
+      # --- Required ---
+      unity_version: "2022.3.20f1"          # <-- set your project's Unity version
+
+      # --- Project ---
+      project_path: "."                      # relative to repo root
+
+      # --- Toggles (also controllable via workflow_dispatch) ---
+      build_android: ${{ github.event_name == 'workflow_dispatch' && inputs.build_android || true }}
+      build_ios:     ${{ github.event_name == 'workflow_dispatch' && inputs.build_ios     || true }}
+
+      # --- Android ---
+      android_package_name: "com.dastangames.mygame"
+      android_build_name:   "MyGame"
+      google_play_track:    "internal"       # internal | alpha | beta | production
+
+      # --- iOS ---
+      ios_bundle_id:        "com.dastangames.mygame"
+      ios_team_id:          "ABCDE12345"     # <-- your Apple Team ID
+      ios_build_name:       "MyGame"
+      match_type:           "appstore"       # appstore | adhoc | development
+      upload_to_testflight: true
+
+    # All secrets are inherited from the calling repo's environment.
+    # Define these in: Settings → Secrets and variables → Actions
+    secrets:
+      # Unity license — choose ONE of the options below:
+      UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}    # Option 1: .ulf file contents
+      # UNITY_EMAIL:  ${{ secrets.UNITY_EMAIL }}      # Option 2: Personal / Pro login
+      # UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+      # UNITY_SERIAL: ${{ secrets.UNITY_SERIAL }}     # Option 2: Pro/Plus serial
+
+      # Android signing
+      ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+      ANDROID_KEYSTORE_PASS:   ${{ secrets.ANDROID_KEYSTORE_PASS }}
+      ANDROID_KEY_ALIAS:       ${{ secrets.ANDROID_KEY_ALIAS }}
+      ANDROID_KEY_PASS:        ${{ secrets.ANDROID_KEY_PASS }}
+
+      # Google Play
+      GOOGLE_PLAY_JSON_KEY:    ${{ secrets.GOOGLE_PLAY_JSON_KEY }}
+
+      # App Store Connect (API key — recommended over username/password)
+      ASC_KEY_ID:     ${{ secrets.ASC_KEY_ID }}
+      ASC_ISSUER_ID:  ${{ secrets.ASC_ISSUER_ID }}
+      ASC_KEY_CONTENT: ${{ secrets.ASC_KEY_CONTENT }}   # base64-encoded .p8 file
+
+      # Fastlane Match (certificate repo)
+      MATCH_PASSWORD:                ${{ secrets.MATCH_PASSWORD }}
+      MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+      MATCH_REPOSITORY:              ${{ secrets.MATCH_REPOSITORY }}
+
+  # ----------------------------------------------------------
+  # Option B: Android only (uncomment to use instead of mobile:)
+  # ----------------------------------------------------------
+  # android-only:
+  #   uses: dastan-games/ci-templates/.github/workflows/unity-android.yml@main
+  #   with:
+  #     unity_version: "2022.3.20f1"
+  #     android_package_name: "com.dastangames.mygame"
+  #   secrets: inherit
+
+  # ----------------------------------------------------------
+  # Option C: iOS only (uncomment to use instead of mobile:)
+  # ----------------------------------------------------------
+  # ios-only:
+  #   uses: dastan-games/ci-templates/.github/workflows/unity-ios.yml@main
+  #   with:
+  #     unity_version: "2022.3.20f1"
+  #     ios_bundle_id: "com.dastangames.mygame"
+  #     ios_team_id: "ABCDE12345"
+  #   secrets: inherit

@@ -1,0 +1,358 @@
+# ============================================================
+# Reusable Workflow: Unity Mobile CI/CD (Android + iOS)
+# Usage: dastan-games/ci-templates/.github/workflows/unity-mobile.yml@main
+# ============================================================
+name: Unity Mobile CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      # --- Unity ---
+      unity_version:
+        description: "Unity editor version (e.g. 2022.3.20f1)"
+        required: true
+        type: string
+      project_path:
+        description: "Relative path to the Unity project root"
+        required: false
+        type: string
+        default: "."
+
+      # --- Build targets ---
+      build_android:
+        description: "Run the Android build job"
+        required: false
+        type: boolean
+        default: true
+      build_ios:
+        description: "Run the iOS build job"
+        required: false
+        type: boolean
+        default: true
+
+      # --- Android ---
+      android_package_name:
+        description: "Android application ID (e.g. com.dastangames.mygame)"
+        required: false
+        type: string
+        default: ""
+      android_build_name:
+        description: "Output filename (without extension)"
+        required: false
+        type: string
+        default: "game"
+      google_play_track:
+        description: "Google Play track to upload to"
+        required: false
+        type: string
+        default: "internal"
+
+      # --- iOS ---
+      ios_bundle_id:
+        description: "iOS bundle identifier (e.g. com.dastangames.mygame)"
+        required: false
+        type: string
+        default: ""
+      ios_team_id:
+        description: "Apple Developer Team ID"
+        required: false
+        type: string
+        default: ""
+      ios_build_name:
+        description: "Output folder name for Xcode project"
+        required: false
+        type: string
+        default: "iOS"
+      match_type:
+        description: "Fastlane Match type: appstore | adhoc | development"
+        required: false
+        type: string
+        default: "appstore"
+      upload_to_testflight:
+        description: "Upload IPA to TestFlight after build"
+        required: false
+        type: boolean
+        default: true
+
+    secrets:
+      # --- Unity license (Professional/Plus) ---
+      UNITY_LICENSE:
+        description: "Contents of Unity .ulf license file (base64 or raw XML)"
+        required: false
+      UNITY_EMAIL:
+        description: "Unity account email (Personal license fallback)"
+        required: false
+      UNITY_PASSWORD:
+        description: "Unity account password (Personal license fallback)"
+        required: false
+      UNITY_SERIAL:
+        description: "Unity serial number (Professional/Plus)"
+        required: false
+
+      # --- Android signing ---
+      ANDROID_KEYSTORE_BASE64:
+        description: "Base64-encoded .keystore file"
+        required: false
+      ANDROID_KEYSTORE_PASS:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASS:
+        required: false
+
+      # --- Google Play ---
+      GOOGLE_PLAY_JSON_KEY:
+        description: "Contents of Google Play service account JSON key"
+        required: false
+
+      # --- Apple / App Store Connect ---
+      ASC_KEY_ID:
+        description: "App Store Connect API key ID"
+        required: false
+      ASC_ISSUER_ID:
+        description: "App Store Connect API issuer ID"
+        required: false
+      ASC_KEY_CONTENT:
+        description: "App Store Connect API private key (.p8) contents (base64)"
+        required: false
+
+      # --- Fastlane Match ---
+      MATCH_PASSWORD:
+        description: "Passphrase used to encrypt Match repository"
+        required: false
+      MATCH_GIT_BASIC_AUTHORIZATION:
+        description: "Base64-encoded user:token for Match git repo access"
+        required: false
+      MATCH_REPOSITORY:
+        description: "SSH or HTTPS URL of the Match certificates repository"
+        required: false
+
+# ============================================================
+# Jobs
+# ============================================================
+jobs:
+  # ----------------------------------------------------------
+  # Determine build number from tag or run number
+  # ----------------------------------------------------------
+  build-metadata:
+    name: Compute Build Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.meta.outputs.build_number }}
+      build_version: ${{ steps.meta.outputs.build_version }}
+    steps:
+      - name: Checkout (shallow for tag detection)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Compute version and build number
+        id: meta
+        shell: bash
+        run: |
+          # Build number — always increasing, use run number as a reliable counter
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+
+          # Semantic version — prefer tag, fall back to 0.1.0
+          if git describe --tags --exact-match HEAD 2>/dev/null; then
+            TAG=$(git describe --tags --exact-match HEAD)
+            # Strip leading 'v' (v1.2.3 → 1.2.3)
+            VERSION="${TAG#v}"
+          else
+            VERSION="0.1.0"
+          fi
+          echo "build_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}  Build: ${BUILD_NUMBER}"
+
+  # ----------------------------------------------------------
+  # Android: ubuntu, GitHub-hosted
+  # ----------------------------------------------------------
+  android:
+    name: Android AAB
+    needs: build-metadata
+    if: ${{ inputs.build_android }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # GameCI: activate Unity
+      - name: Activate Unity license
+        uses: game-ci/unity-activate@v2
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:   ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
+
+      # Decode keystore
+      - name: Decode keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode > "${{ inputs.project_path }}/keystore.keystore"
+
+      # Build
+      - name: Build Android AAB
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:   ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
+        with:
+          unityVersion: ${{ inputs.unity_version }}
+          projectPath:  ${{ inputs.project_path }}
+          targetPlatform: Android
+          buildName:    ${{ inputs.android_build_name }}
+          buildMethod:  ""           # leave blank to use default scene list
+          androidExportType: androidAppBundle
+          androidKeystoreName: keystore.keystore
+          androidKeystoreBase64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass:  ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName:  ${{ secrets.ANDROID_KEY_ALIAS }}
+          androidKeyaliasPass:  ${{ secrets.ANDROID_KEY_PASS }}
+          versioning:   Custom
+          version:      ${{ needs.build-metadata.outputs.build_version }}
+          androidVersionCode: ${{ needs.build-metadata.outputs.build_number }}
+
+      # Return license
+      - name: Return Unity license
+        uses: game-ci/unity-return-license@v2
+        if: always()
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
+
+      # Upload AAB artifact
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-${{ needs.build-metadata.outputs.build_number }}
+          path: build/Android/**/*.aab
+          retention-days: 14
+
+      # Upload to Google Play
+      - name: Set up Ruby for Fastlane
+        if: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: ci-support
+
+      - name: Write Google Play JSON key
+        if: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        run: |
+          echo '${{ secrets.GOOGLE_PLAY_JSON_KEY }}' > /tmp/gp-key.json
+
+      - name: Upload to Google Play (${{ inputs.google_play_track }})
+        if: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        working-directory: ci-support
+        env:
+          GOOGLE_PLAY_JSON_KEY_PATH: /tmp/gp-key.json
+          ANDROID_PACKAGE_NAME: ${{ inputs.android_package_name }}
+          GOOGLE_PLAY_TRACK: ${{ inputs.google_play_track }}
+          AAB_PATH: ${{ github.workspace }}/build/Android
+        run: bundle exec fastlane android upload
+
+  # ----------------------------------------------------------
+  # iOS: macOS, self-hosted
+  # ----------------------------------------------------------
+  ios:
+    name: iOS IPA
+    needs: build-metadata
+    if: ${{ inputs.build_ios }}
+    runs-on: [self-hosted, macOS]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      # Activate Unity (macOS — no Docker, uses installed Unity)
+      - name: Activate Unity license
+        uses: game-ci/unity-activate@v2
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+
+      # Build Xcode project
+      - name: Build iOS Xcode project
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+        with:
+          unityVersion:   ${{ inputs.unity_version }}
+          projectPath:    ${{ inputs.project_path }}
+          targetPlatform: iOS
+          buildName:      ${{ inputs.ios_build_name }}
+          versioning:     Custom
+          version:        ${{ needs.build-metadata.outputs.build_version }}
+          # iOS: export Xcode project only (no archiving here)
+          customParameters: >-
+            -appleDeveloperTeamID ${{ inputs.ios_team_id }}
+
+      # Return Unity license
+      - name: Return Unity license
+        uses: game-ci/unity-return-license@v2
+        if: always()
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
+
+      # Upload Xcode project artifact (optional, before signing)
+      - name: Upload Xcode project artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-xcode-${{ needs.build-metadata.outputs.build_number }}
+          path: build/iOS/**
+          retention-days: 3     # short — Xcode projects are large
+
+      # Set up Ruby + Fastlane
+      - name: Set up Ruby for Fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: ci-support
+
+      # Write App Store Connect API key
+      - name: Write ASC API key
+        run: |
+          echo '${{ secrets.ASC_KEY_CONTENT }}' | base64 --decode > /tmp/asc-key.p8
+
+      # Fastlane Match → Gym → Pilot (TestFlight)
+      - name: Archive, sign and upload to TestFlight
+        if: ${{ inputs.upload_to_testflight }}
+        working-directory: ci-support
+        env:
+          MATCH_PASSWORD:                ${{ secrets.MATCH_PASSWORD }}
+          MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
+          MATCH_REPOSITORY:              ${{ secrets.MATCH_REPOSITORY }}
+          MATCH_TYPE:                    ${{ inputs.match_type }}
+          IOS_BUNDLE_ID:                 ${{ inputs.ios_bundle_id }}
+          IOS_TEAM_ID:                   ${{ inputs.ios_team_id }}
+          ASC_KEY_ID:                    ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID:                 ${{ secrets.ASC_ISSUER_ID }}
+          ASC_KEY_PATH:                  /tmp/asc-key.p8
+          XCODE_PROJECT_PATH:            ${{ github.workspace }}/build/iOS/${{ inputs.ios_build_name }}
+          BUILD_NUMBER:                  ${{ needs.build-metadata.outputs.build_number }}
+          BUILD_VERSION:                 ${{ needs.build-metadata.outputs.build_version }}
+        run: bundle exec fastlane ios upload
+
+      # Upload IPA artifact
+      - name: Upload IPA artifact
+        if: ${{ inputs.upload_to_testflight }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-ipa-${{ needs.build-metadata.outputs.build_number }}
+          path: ci-support/build/*.ipa
+          retention-days: 14

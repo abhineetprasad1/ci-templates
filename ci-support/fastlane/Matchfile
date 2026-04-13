@@ -1,0 +1,30 @@
+# frozen_string_literal: true
+
+# ============================================================
+# Matchfile — dastan-games/ci-templates
+#
+# These values are overridden at runtime by env vars in the
+# GitHub Actions workflow. This file sets sensible defaults
+# for local development use.
+#
+# To initialise a new game's certificates:
+#   MATCH_REPOSITORY=git@github.com:dastan-games/certs.git \
+#   IOS_BUNDLE_ID=com.dastangames.mygame \
+#   IOS_TEAM_ID=XXXXXXXXXX \
+#   bundle exec fastlane match appstore
+# ============================================================
+
+git_url(ENV["MATCH_REPOSITORY"] || "git@github.com:dastan-games/certs.git")
+
+storage_mode("git")
+
+type(ENV["MATCH_TYPE"] || "appstore")   # appstore | adhoc | development
+
+app_identifier([ENV["IOS_BUNDLE_ID"] || "com.dastangames.placeholder"])
+
+team_id(ENV["IOS_TEAM_ID"])
+
+username(ENV["FASTLANE_USER"])          # Apple ID — only needed for non-API-key flows
+
+# Use a dedicated branch per game to avoid certificate collisions
+# branch("<game-slug>")                 # uncomment and set per game repo

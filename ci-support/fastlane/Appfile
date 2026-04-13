@@ -1,0 +1,17 @@
+# frozen_string_literal: true
+
+# ============================================================
+# Appfile — dastan-games/ci-templates
+# Values here are defaults; each game repo should override via
+# env vars or a local Appfile that shadows this one.
+# ============================================================
+
+# iOS
+app_identifier(ENV["IOS_BUNDLE_ID"] || "com.dastangames.placeholder")
+team_id(ENV["IOS_TEAM_ID"])
+
+# Android
+package_name(ENV["ANDROID_PACKAGE_NAME"] || "com.dastangames.placeholder")
+
+# App Store Connect — prefer API key auth over user/password
+# apple_id(ENV["FASTLANE_USER"])       # uncomment only if not using ASC API key

@@ -1,0 +1,152 @@
+# ============================================================
+# Reusable Workflow: Android-only build + upload
+# Usage: dastan-games/ci-templates/.github/workflows/unity-android.yml@main
+# ============================================================
+name: Unity Android CI/CD
+
+on:
+  workflow_call:
+    inputs:
+      unity_version:
+        required: true
+        type: string
+      project_path:
+        required: false
+        type: string
+        default: "."
+      android_package_name:
+        required: false
+        type: string
+        default: ""
+      android_build_name:
+        required: false
+        type: string
+        default: "game"
+      google_play_track:
+        required: false
+        type: string
+        default: "internal"
+    secrets:
+      UNITY_LICENSE:
+        required: false
+      UNITY_EMAIL:
+        required: false
+      UNITY_PASSWORD:
+        required: false
+      UNITY_SERIAL:
+        required: false
+      ANDROID_KEYSTORE_BASE64:
+        required: false
+      ANDROID_KEYSTORE_PASS:
+        required: false
+      ANDROID_KEY_ALIAS:
+        required: false
+      ANDROID_KEY_PASS:
+        required: false
+      GOOGLE_PLAY_JSON_KEY:
+        required: false
+
+jobs:
+  build-metadata:
+    name: Compute Build Metadata
+    runs-on: ubuntu-latest
+    outputs:
+      build_number: ${{ steps.meta.outputs.build_number }}
+      build_version: ${{ steps.meta.outputs.build_version }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - id: meta
+        shell: bash
+        run: |
+          BUILD_NUMBER=${{ github.run_number }}
+          echo "build_number=${BUILD_NUMBER}" >> "$GITHUB_OUTPUT"
+          if git describe --tags --exact-match HEAD 2>/dev/null; then
+            TAG=$(git describe --tags --exact-match HEAD)
+            VERSION="${TAG#v}"
+          else
+            VERSION="0.1.0"
+          fi
+          echo "build_version=${VERSION}" >> "$GITHUB_OUTPUT"
+
+  android:
+    name: Android AAB
+    needs: build-metadata
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          lfs: true
+
+      - name: Activate Unity license
+        uses: game-ci/unity-activate@v2
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+
+      - name: Decode keystore
+        if: ${{ secrets.ANDROID_KEYSTORE_BASE64 != '' }}
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 --decode \
+            > "${{ inputs.project_path }}/keystore.keystore"
+
+      - name: Build Android AAB
+        uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
+          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
+        with:
+          unityVersion:           ${{ inputs.unity_version }}
+          projectPath:            ${{ inputs.project_path }}
+          targetPlatform:         Android
+          buildName:              ${{ inputs.android_build_name }}
+          androidExportType:      androidAppBundle
+          androidKeystoreName:    keystore.keystore
+          androidKeystoreBase64:  ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          androidKeystorePass:    ${{ secrets.ANDROID_KEYSTORE_PASS }}
+          androidKeyaliasName:    ${{ secrets.ANDROID_KEY_ALIAS }}
+          androidKeyaliasPass:    ${{ secrets.ANDROID_KEY_PASS }}
+          versioning:             Custom
+          version:                ${{ needs.build-metadata.outputs.build_version }}
+          androidVersionCode:     ${{ needs.build-metadata.outputs.build_number }}
+
+      - name: Return Unity license
+        uses: game-ci/unity-return-license@v2
+        if: always()
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-aab-${{ needs.build-metadata.outputs.build_number }}
+          path: build/Android/**/*.aab
+          retention-days: 14
+
+      - name: Set up Ruby for Fastlane
+        if: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: "3.2"
+          bundler-cache: true
+          working-directory: ci-support
+
+      - name: Write Google Play JSON key
+        if: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        run: echo '${{ secrets.GOOGLE_PLAY_JSON_KEY }}' > /tmp/gp-key.json
+
+      - name: Upload to Google Play (${{ inputs.google_play_track }})
+        if: ${{ secrets.GOOGLE_PLAY_JSON_KEY != '' }}
+        working-directory: ci-support
+        env:
+          GOOGLE_PLAY_JSON_KEY_PATH: /tmp/gp-key.json
+          ANDROID_PACKAGE_NAME:      ${{ inputs.android_package_name }}
+          GOOGLE_PLAY_TRACK:         ${{ inputs.google_play_track }}
+          AAB_PATH:                  ${{ github.workspace }}/build/Android
+        run: bundle exec fastlane android upload
