@@ -57,8 +57,8 @@ jobs:
     name: iOS IPA → TestFlight
     runs-on: [self-hosted, macOS]
     env:
-      # Homebrew (Apple Silicon) binaries available to every step
-      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      # Homebrew Ruby binaries take priority over system Ruby 2.6
+      PATH: /opt/homebrew/opt/ruby/bin:/opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
       # Fastlane support files are checked out here (ci-templates repo root)
       FASTLANE_DIR: ${{ github.workspace }}/_ci/ci-support
 
@@ -133,16 +133,13 @@ jobs:
         working-directory: ${{ env.FASTLANE_DIR }}
         shell: bash
         run: |
-          BREW_PREFIX="$(brew --prefix)"
-          BREW_GEM="${BREW_PREFIX}/bin/gem"
-          BREW_BUNDLE="${BREW_PREFIX}/bin/bundle"
+          RUBY_BIN="/opt/homebrew/opt/ruby/bin"
 
-          # Install bundler version matching Gemfile.lock using Homebrew Ruby
+          # Install bundler version matching Gemfile.lock
           BUNDLER_VERSION=$(grep -A1 "BUNDLED WITH" Gemfile.lock | tail -1 | tr -d ' ')
-          "$BREW_GEM" install bundler:${BUNDLER_VERSION} --no-document
+          "${RUBY_BIN}/gem" install bundler:${BUNDLER_VERSION} --no-document
 
-          # Install gems
-          "$BREW_BUNDLE" install
+          "${RUBY_BIN}/bundle" install
 
       - name: Write ASC API key
         shell: bash
@@ -166,7 +163,7 @@ jobs:
           XCODE_PROJECT_PATH:            ${{ github.workspace }}/build/iOS/${{ inputs.ios_build_name }}
           BUILD_NUMBER:                  ${{ steps.meta.outputs.build_number }}
           BUILD_VERSION:                 ${{ steps.meta.outputs.build_version }}
-        run: "$(brew --prefix)/bin/bundle exec fastlane ios upload"
+        run: /opt/homebrew/opt/ruby/bin/bundle exec fastlane ios upload
 
       # ── Upload IPA artifact ───────────────────────────────────
       - name: Upload IPA artifact
