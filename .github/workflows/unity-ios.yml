@@ -53,17 +53,22 @@ on:
         required: false
 
 jobs:
-  build-metadata:
-    name: Compute Build Metadata
-    runs-on: ubuntu-latest
-    outputs:
-      build_number: ${{ steps.meta.outputs.build_number }}
-      build_version: ${{ steps.meta.outputs.build_version }}
+  ios:
+    name: iOS IPA → TestFlight
+    runs-on: [self-hosted, macOS]
+    env:
+      # Make Homebrew binaries available to all steps
+      PATH: /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
     steps:
+      # ── Compute build metadata ──────────────────────────────
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0
-      - id: meta
+          lfs: true
+          submodules: recursive
+          fetch-depth: 0        # needed for tag detection
+
+      - name: Compute build metadata
+        id: meta
         shell: bash
         run: |
           BUILD_NUMBER=${{ github.run_number }}
@@ -76,16 +81,7 @@ jobs:
           fi
           echo "build_version=${VERSION}" >> "$GITHUB_OUTPUT"
 
-  ios:
-    name: iOS IPA → TestFlight
-    needs: build-metadata
-    runs-on: [self-hosted, macOS]
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          lfs: true
-          submodules: recursive
-
+      # ── Fastlane support files ───────────────────────────────
       - name: Checkout ci-templates (Fastlane support)
         uses: actions/checkout@v4
         with:
@@ -93,6 +89,7 @@ jobs:
           path: ci-support
           ref: main
 
+      # ── Unity build ─────────────────────────────────────────
       - name: Build iOS Xcode project
         uses: game-ci/unity-builder@v4
         env:
@@ -105,20 +102,20 @@ jobs:
           targetPlatform:     iOS
           buildName:          ${{ inputs.ios_build_name }}
           versioning:         Custom
-          version:            ${{ needs.build-metadata.outputs.build_version }}
+          version:            ${{ steps.meta.outputs.build_version }}
           customParameters:   "-appleDeveloperTeamID ${{ inputs.ios_team_id }}"
           skipActivation:     true
 
+      # ── Fastlane ─────────────────────────────────────────────
       - name: Install Fastlane dependencies
         working-directory: ci-support
         run: |
-          export PATH="/opt/homebrew/bin:$PATH"
           gem install bundler --no-document 2>/dev/null || true
           bundle install
 
       - name: Write ASC API key
         run: |
-          echo '${{ secrets.ASC_KEY_CONTENT }}' | base64 --decode > /tmp/asc-key.p8
+          echo '${{ secrets.ASC_KEY_CONTENT }}' | base64 -D > /tmp/asc-key.p8
 
       - name: Archive, sign and upload to TestFlight
         if: ${{ inputs.upload_to_testflight }}
@@ -134,14 +131,14 @@ jobs:
           ASC_ISSUER_ID:                 ${{ secrets.ASC_ISSUER_ID }}
           ASC_KEY_PATH:                  /tmp/asc-key.p8
           XCODE_PROJECT_PATH:            ${{ github.workspace }}/build/iOS/${{ inputs.ios_build_name }}
-          BUILD_NUMBER:                  ${{ needs.build-metadata.outputs.build_number }}
-          BUILD_VERSION:                 ${{ needs.build-metadata.outputs.build_version }}
+          BUILD_NUMBER:                  ${{ steps.meta.outputs.build_number }}
+          BUILD_VERSION:                 ${{ steps.meta.outputs.build_version }}
         run: bundle exec fastlane ios upload
 
       - name: Upload IPA artifact
         if: ${{ inputs.upload_to_testflight }}
         uses: actions/upload-artifact@v4
         with:
-          name: ios-ipa-${{ needs.build-metadata.outputs.build_number }}
+          name: ios-ipa-${{ steps.meta.outputs.build_number }}
           path: ci-support/build/*.ipa
           retention-days: 14
