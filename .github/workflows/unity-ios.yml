@@ -35,6 +35,10 @@ on:
     secrets:
       UNITY_LICENSE:
         required: true
+      UNITY_EMAIL:
+        required: true
+      UNITY_PASSWORD:
+        required: true
       ASC_KEY_ID:
         required: false
       ASC_ISSUER_ID:
@@ -84,7 +88,9 @@ jobs:
       - name: Build iOS Xcode project
         uses: game-ci/unity-builder@v4
         env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
+          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
+          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
+          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
           unityVersion:       ${{ inputs.unity_version }}
           projectPath:        ${{ inputs.project_path }}
