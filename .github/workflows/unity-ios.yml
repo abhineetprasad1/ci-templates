@@ -57,16 +57,45 @@ jobs:
     name: iOS IPA → TestFlight
     runs-on: [self-hosted, macOS]
     env:
-      # Make Homebrew binaries available to all steps
-      PATH: /opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      # Homebrew (Apple Silicon) binaries available to every step
+      PATH: /opt/homebrew/bin:/opt/homebrew/sbin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin
+      # Fastlane support files are checked out here (ci-templates repo root)
+      FASTLANE_DIR: ${{ github.workspace }}/_ci/ci-support
+
     steps:
-      # ── Compute build metadata ──────────────────────────────
-      - uses: actions/checkout@v4
+      # ── Cleanup workspace from previous runs ─────────────────
+      - name: Clean workspace
+        shell: bash
+        run: |
+          rm -rf "${{ github.workspace }}/build"
+          rm -rf "${{ github.workspace }}/_ci"
+
+      # ── Checkout game project ─────────────────────────────────
+      - name: Checkout game project
+        uses: actions/checkout@v4
         with:
           lfs: true
           submodules: recursive
-          fetch-depth: 0        # needed for tag detection
+          fetch-depth: 0
 
+      - name: Ensure git-lfs is initialised
+        shell: bash
+        run: |
+          if ! command -v git-lfs &>/dev/null; then
+            brew install git-lfs
+          fi
+          git lfs install
+          git lfs pull
+
+      # ── Checkout ci-templates (Fastlane support) ─────────────
+      - name: Checkout ci-templates
+        uses: actions/checkout@v4
+        with:
+          repository: abhineetprasad1/ci-templates
+          path: _ci
+          ref: main
+
+      # ── Compute build metadata ────────────────────────────────
       - name: Compute build metadata
         id: meta
         shell: bash
@@ -80,16 +109,9 @@ jobs:
             VERSION="0.1.0"
           fi
           echo "build_version=${VERSION}" >> "$GITHUB_OUTPUT"
+          echo "Version: ${VERSION}  Build: ${BUILD_NUMBER}"
 
-      # ── Fastlane support files ───────────────────────────────
-      - name: Checkout ci-templates (Fastlane support)
-        uses: actions/checkout@v4
-        with:
-          repository: abhineetprasad1/ci-templates
-          path: ci-support
-          ref: main
-
-      # ── Unity build ─────────────────────────────────────────
+      # ── Unity iOS build ───────────────────────────────────────
       - name: Build iOS Xcode project
         uses: game-ci/unity-builder@v4
         env:
@@ -97,29 +119,32 @@ jobs:
           UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
           UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
         with:
-          unityVersion:       ${{ inputs.unity_version }}
-          projectPath:        ${{ inputs.project_path }}
-          targetPlatform:     iOS
-          buildName:          ${{ inputs.ios_build_name }}
-          versioning:         Custom
-          version:            ${{ steps.meta.outputs.build_version }}
-          customParameters:   "-appleDeveloperTeamID ${{ inputs.ios_team_id }}"
-          skipActivation:     true
+          unityVersion:     ${{ inputs.unity_version }}
+          projectPath:      ${{ inputs.project_path }}
+          targetPlatform:   iOS
+          buildName:        ${{ inputs.ios_build_name }}
+          versioning:       Custom
+          version:          ${{ steps.meta.outputs.build_version }}
+          customParameters: "-appleDeveloperTeamID ${{ inputs.ios_team_id }}"
+          skipActivation:   true
 
-      # ── Fastlane ─────────────────────────────────────────────
+      # ── Fastlane ──────────────────────────────────────────────
       - name: Install Fastlane dependencies
-        working-directory: ci-support
+        working-directory: ${{ env.FASTLANE_DIR }}
+        shell: bash
         run: |
           gem install bundler --no-document 2>/dev/null || true
           bundle install
 
       - name: Write ASC API key
+        shell: bash
         run: |
           echo '${{ secrets.ASC_KEY_CONTENT }}' | base64 -D > /tmp/asc-key.p8
 
       - name: Archive, sign and upload to TestFlight
         if: ${{ inputs.upload_to_testflight }}
-        working-directory: ci-support
+        working-directory: ${{ env.FASTLANE_DIR }}
+        shell: bash
         env:
           MATCH_PASSWORD:                ${{ secrets.MATCH_PASSWORD }}
           MATCH_GIT_BASIC_AUTHORIZATION: ${{ secrets.MATCH_GIT_BASIC_AUTHORIZATION }}
@@ -135,10 +160,11 @@ jobs:
           BUILD_VERSION:                 ${{ steps.meta.outputs.build_version }}
         run: bundle exec fastlane ios upload
 
+      # ── Upload IPA artifact ───────────────────────────────────
       - name: Upload IPA artifact
         if: ${{ inputs.upload_to_testflight }}
         uses: actions/upload-artifact@v4
         with:
           name: ios-ipa-${{ steps.meta.outputs.build_number }}
-          path: ci-support/build/*.ipa
+          path: ${{ env.FASTLANE_DIR }}/build/*.ipa
           retention-days: 14
