@@ -42,13 +42,12 @@ platform :ios do
 
     # 1. Fetch / refresh certificates and provisioning profiles
     match(
-      type:                        match_type,
-      app_identifier:              bundle_id,
-      team_id:                     team_id,
-      git_url:                     ENV.fetch("MATCH_REPOSITORY"),
-      git_basic_authorization:     ENV["MATCH_GIT_BASIC_AUTHORIZATION"],
-      readonly:                    is_ci,          # never create new certs in CI
-      clone_branch_directly:       true
+      type:                    match_type,
+      app_identifier:          bundle_id,
+      team_id:                 team_id,
+      git_url:                 ENV.fetch("MATCH_REPOSITORY"),
+      git_basic_authorization: ENV["MATCH_GIT_BASIC_AUTHORIZATION"],
+      readonly:                is_ci
     )
 
     # 2. Set build number in the Xcode project
