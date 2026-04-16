@@ -109,12 +109,12 @@ jobs:
           customParameters:   "-appleDeveloperTeamID ${{ inputs.ios_team_id }}"
           skipActivation:     true
 
-      - name: Set up Ruby for Fastlane
-        uses: ruby/setup-ruby@v1
-        with:
-          ruby-version: "3.2"
-          bundler-cache: true
-          working-directory: ci-support
+      - name: Install Fastlane dependencies
+        working-directory: ci-support
+        run: |
+          export PATH="/opt/homebrew/bin:$PATH"
+          gem install bundler --no-document 2>/dev/null || true
+          bundle install
 
       - name: Write ASC API key
         run: |
