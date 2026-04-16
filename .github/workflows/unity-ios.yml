@@ -86,6 +86,13 @@ jobs:
           lfs: true
           submodules: recursive
 
+      - name: Checkout ci-templates (Fastlane support)
+        uses: actions/checkout@v4
+        with:
+          repository: abhineetprasad1/ci-templates
+          path: ci-support
+          ref: main
+
       - name: Build iOS Xcode project
         uses: game-ci/unity-builder@v4
         env:
