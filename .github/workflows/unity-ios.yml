@@ -33,6 +33,8 @@ on:
         type: boolean
         default: true
     secrets:
+      UNITY_LICENSE:
+        required: true
       ASC_KEY_ID:
         required: false
       ASC_ISSUER_ID:
@@ -81,6 +83,8 @@ jobs:
 
       - name: Build iOS Xcode project
         uses: game-ci/unity-builder@v4
+        env:
+          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
         with:
           unityVersion:       ${{ inputs.unity_version }}
           projectPath:        ${{ inputs.project_path }}
