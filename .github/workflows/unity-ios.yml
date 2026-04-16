@@ -133,8 +133,16 @@ jobs:
         working-directory: ${{ env.FASTLANE_DIR }}
         shell: bash
         run: |
-          gem install bundler --no-document 2>/dev/null || true
-          bundle install
+          BREW_PREFIX="$(brew --prefix)"
+          BREW_GEM="${BREW_PREFIX}/bin/gem"
+          BREW_BUNDLE="${BREW_PREFIX}/bin/bundle"
+
+          # Install bundler version matching Gemfile.lock using Homebrew Ruby
+          BUNDLER_VERSION=$(grep -A1 "BUNDLED WITH" Gemfile.lock | tail -1 | tr -d ' ')
+          "$BREW_GEM" install bundler:${BUNDLER_VERSION} --no-document
+
+          # Install gems
+          "$BREW_BUNDLE" install
 
       - name: Write ASC API key
         shell: bash
@@ -158,7 +166,7 @@ jobs:
           XCODE_PROJECT_PATH:            ${{ github.workspace }}/build/iOS/${{ inputs.ios_build_name }}
           BUILD_NUMBER:                  ${{ steps.meta.outputs.build_number }}
           BUILD_VERSION:                 ${{ steps.meta.outputs.build_version }}
-        run: bundle exec fastlane ios upload
+        run: "$(brew --prefix)/bin/bundle exec fastlane ios upload"
 
       # ── Upload IPA artifact ───────────────────────────────────
       - name: Upload IPA artifact
