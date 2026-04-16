@@ -33,14 +33,6 @@ on:
         type: boolean
         default: true
     secrets:
-      UNITY_LICENSE:
-        required: false
-      UNITY_EMAIL:
-        required: false
-      UNITY_PASSWORD:
-        required: false
-      UNITY_SERIAL:
-        required: false
       ASC_KEY_ID:
         required: false
       ASC_ISSUER_ID:
@@ -87,21 +79,8 @@ jobs:
         with:
           lfs: true
 
-      - name: Activate Unity license
-        uses: game-ci/unity-activate@v2
-        env:
-          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
-
       - name: Build iOS Xcode project
         uses: game-ci/unity-builder@v4
-        env:
-          UNITY_LICENSE:  ${{ secrets.UNITY_LICENSE }}
-          UNITY_EMAIL:    ${{ secrets.UNITY_EMAIL }}
-          UNITY_PASSWORD: ${{ secrets.UNITY_PASSWORD }}
-          UNITY_SERIAL:   ${{ secrets.UNITY_SERIAL }}
         with:
           unityVersion:       ${{ inputs.unity_version }}
           projectPath:        ${{ inputs.project_path }}
@@ -110,13 +89,6 @@ jobs:
           versioning:         Custom
           version:            ${{ needs.build-metadata.outputs.build_version }}
           customParameters:   "-appleDeveloperTeamID ${{ inputs.ios_team_id }}"
-
-      - name: Return Unity license
-        uses: game-ci/unity-return-license@v2
-        if: always()
-        env:
-          UNITY_LICENSE: ${{ secrets.UNITY_LICENSE }}
-          UNITY_SERIAL:  ${{ secrets.UNITY_SERIAL }}
 
       - name: Set up Ruby for Fastlane
         uses: ruby/setup-ruby@v1
