@@ -60,7 +60,14 @@ platform :ios do
       end
     )
 
-    # 3. Archive and export IPA
+    # 3. Install CocoaPods dependencies (IronSource/LevelPlay SDK etc.)
+    cocoapods(
+      podfile:                  "#{xcode_project}/Podfile",
+      try_repo_update_on_error: true,
+      use_bundle_exec:          false
+    )
+
+    # 4. Archive and export IPA
     gym(
       scheme:               "Unity-iPhone",
       project:              "#{xcode_project}/Unity-iPhone.xcodeproj",
@@ -79,7 +86,7 @@ platform :ios do
       }
     )
 
-    # 4. Upload to TestFlight
+    # 5. Upload to TestFlight
     pilot(
       api_key:                  asc_api_key,
       app_identifier:           bundle_id,
