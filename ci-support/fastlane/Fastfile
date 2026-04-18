@@ -68,9 +68,10 @@ platform :ios do
     )
 
     # 4. Archive and export IPA
+    # Use .xcworkspace (not .xcodeproj) because CocoaPods generates a workspace
     gym(
       scheme:               "Unity-iPhone",
-      project:              "#{xcode_project}/Unity-iPhone.xcodeproj",
+      workspace:            "#{xcode_project}/Unity-iPhone.xcworkspace",
       configuration:        "Release",
       export_method:        match_type == "appstore" ? "app-store" : match_type,
       export_team_id:       team_id,
