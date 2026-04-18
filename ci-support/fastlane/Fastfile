@@ -80,6 +80,7 @@ platform :ios do
       clean:                true,
       silent:               false,
       include_bitcode:      false,
+      xcargs:               "DEVELOPMENT_TEAM=#{team_id} CODE_SIGN_STYLE=Manual",
       export_options: {
         provisioningProfiles: {
           bundle_id => "match #{match_type.capitalize} #{bundle_id}"
