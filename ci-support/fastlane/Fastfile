@@ -80,10 +80,13 @@ platform :ios do
       clean:                true,
       silent:               false,
       include_bitcode:      false,
-      xcargs:               "DEVELOPMENT_TEAM=#{team_id} CODE_SIGN_STYLE=Manual",
+      xcargs:               "DEVELOPMENT_TEAM=#{team_id} CODE_SIGN_STYLE=Manual CODE_SIGN_IDENTITY=\"Apple Distribution\" PROVISIONING_PROFILE_SPECIFIER=\"match AppStore #{bundle_id}\"",
       export_options: {
+        method:               match_type == "appstore" ? "app-store" : match_type,
+        signingStyle:         "manual",
+        teamID:               team_id,
         provisioningProfiles: {
-          bundle_id => "match #{match_type.capitalize} #{bundle_id}"
+          bundle_id => "match AppStore #{bundle_id}"
         }
       }
     )
