@@ -57,6 +57,9 @@ platform :ios do
       block:        proc do |plist|
         plist["CFBundleShortVersionString"] = build_version
         plist["CFBundleVersion"]            = build_number
+        # Automates the TestFlight export compliance question.
+        # "None of the algorithms mentioned above" — app uses no non-exempt encryption.
+        plist["ITSAppUsesNonExemptEncryption"] = false
       end
     )
 
